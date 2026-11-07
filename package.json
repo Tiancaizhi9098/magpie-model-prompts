@@ -1,0 +1,25 @@
+{
+  "name": "magpie-model-prompts",
+  "version": "1.1.1",
+  "description": "在 Magpie 中自动识别模型，为每个模型分别粘贴并追加系统提示词。",
+  "type": "module",
+  "main": "./index.mjs",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/Tiancaizhi9098/magpie-model-prompts.git" },
+  "homepage": "https://github.com/Tiancaizhi9098/magpie-model-prompts#readme",
+  "bugs": { "url": "https://github.com/Tiancaizhi9098/magpie-model-prompts/issues" },
+  "keywords": ["magpie", "magpie-plugin", "system-prompt", "middleware"],
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "magpie": {
+    "name": "模型提示词",
+    "summary": { "zh": "自动识别本机模型，分别粘贴提示词，选择头部或末尾插入。", "en": "Detect local Magpie models and add a different prompt before or after each model's instructions." },
+    "middleware": "./prompts.middleware.js",
+    "page": {
+      "title": "Model Prompts",
+      "titles": { "zh": "模型提示词", "zh-TW": "模型提示詞" },
+      "file": "page/index.html",
+      "icon": "page/icon.svg"
+    },
+    "options": { "version": 1, "enabled": true, "rules": {} }
+  }
+}
