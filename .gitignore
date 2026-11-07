@@ -1,5 +1,8 @@
 node_modules/
 page/catalog.generated.js
+page/launch.generated.js
+runtime.middleware.js
+*.next
 page/*.next
 *.log
 *.zip

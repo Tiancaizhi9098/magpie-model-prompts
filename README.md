@@ -34,7 +34,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -MagpiePath "D
 
 也可以直接在 Magpie → 插件 → 添加插件中，选择这个包含 `package.json` 的文件夹。通过本地目录安装后请保留该目录。
 
-更新后，如果已经打开的页面仍显示旧界面，请保存现有草稿，退出 Magpie 后重新打开，以便重新载入页面文件和插件宿主。
+更新后，关闭并重新打开“模型提示词”页面。仍显示旧版时，退出并重新打开 Magpie。旧版保存失败的草稿请先复制保留。
+
+**2.0.0 更改了保存方式，不读取、不兼容迁移 1.x 的已保存内容。首次更新后，请重新粘贴各模型的提示词。** 后续的 2.x 更新会继续使用独立文件中的内容。
 
 ## 使用
 
@@ -56,9 +58,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -MagpiePath "D
 - 列表来自 Magpie 的 `/v1/models`：显示当前开放的模型。暂时关闭的模型会保留其已保存规则，并标记为“当前未开放”。路由组不单独列出。
 - 提示词仍受模型和上游服务的指令优先级影响；保存不等于保证模型遵循每条文字。
 
-模型目录由宿主在后台每 5 秒读取一次，只访问本机 HTTP 网关，不发送推理请求，不消耗模型额度。页面只读取本插件的设置和脱敏后的模型名称目录，不包含供应商密钥。动态目录保存在被 Git 忽略的 `page/catalog.generated.js` 中。自定义本机网关端口时，可在插件 Options 增加 `gatewayAddress`，例如 `127.0.0.1:3499`。
+页面每 5 秒刷新一次模型目录，只访问本机 HTTP 网关，不发送推理请求，不消耗模型额度。目录仅包含模型名称和供应商 ID，不包含供应商密钥。自定义本机网关端口时，可在插件 Options 增加 `gatewayAddress`，例如 `127.0.0.1:3499`。
 
-所有规则保存在 Magpie 自己的 `plugins.json` 中本插件的 options。页面保存总量限制约 60 KB；超出时页面会提示，不会覆盖原配置。建议使用 Magpie 0.1.3225 或支持 `onProvider` 中间件的更新版本。
+## 提示词保存与容量
+
+2.0.0 通过插件自带的本机编辑服务保存，绕开 Magpie 页面设置接口的 64 KB 限制。**全部模型合计支持接近 8 MiB 的 JSON 数据**（预留少量元数据空间；按 UTF-8 字节计算）。超出时会提示，不会覆盖之前保存的内容。保存后通常约 1 秒内用于新请求，不需要重启。
+
+Windows 默认保存位置：
+
+```text
+%USERPROFILE%\.config\magpie\model-prompts\prompts.json
+```
+
+其他系统默认 `~/.config/magpie/model-prompts/prompts.json`；设置 `XDG_CONFIG_HOME` 时改用该目录下的 `magpie/model-prompts/`。备份时复制这个文件即可。提示词保持在本机，不上传到 GitHub。卸载插件会保留此文件，便于之后重新安装使用。
+
+服务仅监听 `127.0.0.1:34931`，由 Magpie 自带的 Bun 启动，页面仍在 Magpie 内打开。保存接口使用本机随机访问凭证校验。端口冲突时在插件 Options 设置 `servicePort`，例如 `34932`，并重新打开页面。
+
+为实现热更新，插件目录还会生成 `runtime.middleware.js` 和 `page/launch.generated.js`；它们含有本机私有数据，已被 Git 忽略。不要上传这些生成文件或本地 `prompts.json`、`service.key`。更新插件会从独立文件重新生成所需缓存。
 
 ## 卸载
 
@@ -66,7 +82,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -MagpiePath "D
 
 ## 开发验证
 
-Node.js 20+：`node --test test/*.test.mjs`。中间件为原生 JavaScript，直接在 Magpie 的 moejs 中执行；模型同步器使用 Magpie 自带的 Bun。
+Node.js 20+：`npm test`。中间件为原生 JavaScript，直接在 Magpie 的 moejs 中执行；本机编辑服务使用 Magpie 自带的 Bun。
 
 ## License
 

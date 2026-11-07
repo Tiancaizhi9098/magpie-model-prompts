@@ -15,6 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test test/prompts.test.mjs
+      - run: npm test
       - run: node --check page/app.js
       - run: node --check index.mjs

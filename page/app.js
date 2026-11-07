@@ -2,7 +2,19 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const state = { ready: false, enabled: true, rules: Object.create(null), models: [], selected: '', dirty: false, saving: false };
-  let catalogLoading = false, revision = 0, lastWriteAt = 0;
+  let catalogLoading = false, revision = 0, storedRevision = 'empty';
+  const token = decodeURIComponent(location.hash.slice(1));
+  async function api(path, body) {
+    if (!token) throw new Error('请从 Magpie 重新打开本插件。');
+    const response = await fetch(path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { Authorization: 'Bearer ' + token, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || '本机保存服务连接失败。');
+    return result;
+  }
   function error(message = '') { $('error').textContent = message; $('error').hidden = !message; }
   function changed() { revision++; state.dirty = true; $('save-status').textContent = '有未保存的修改'; $('save').disabled = !state.ready || state.saving; }
   function draft() {
@@ -51,14 +63,12 @@
     $('catalog-status').textContent = snapshot.available ? '已连接本机 Magpie · 自动同步模型' : '正在连接本机 Magpie，暂时显示已识别的模型';
     if (state.ready && !state.selected && state.models.length) select(state.models[0].id);
   }
-  function refreshCatalog() {
+  async function refreshCatalog() {
     if (catalogLoading) return;
     catalogLoading = true;
-    const script = document.createElement('script');
-    script.src = 'catalog.generated.js?t=' + Date.now();
-    script.onload = () => { catalogLoading = false; script.remove(); applyCatalog(window.MODEL_PROMPT_CATALOG); };
-    script.onerror = () => { catalogLoading = false; script.remove(); $('catalog-status').textContent = '模型列表读取失败，请点击刷新重试'; };
-    document.head.append(script);
+    try { applyCatalog(await api('/api/models')); }
+    catch { $('catalog-status').textContent = '模型列表读取失败，请点击刷新重试'; }
+    finally { catalogLoading = false; }
   }
   async function save() {
     if (!state.ready || state.saving) return;
@@ -67,14 +77,10 @@
     try {
       const rules = Object.create(null);
       for (const [id, rule] of Object.entries(state.rules)) if (rule.prompt?.trim()) rules[id] = { enabled: rule.enabled !== false, prompt: rule.prompt, position: rule.position === 'prepend' ? 'prepend' : 'append' };
-      const current = await magpie.options.get();
-      const options = { ...current, version: 1, enabled: state.enabled, rules };
-      if (new TextEncoder().encode(JSON.stringify({ options })).length > 60000) throw new Error('提示词总量过大，超过了 Magpie 页面设置的保存容量。请缩短部分提示词后重试。');
-      // Magpie's page bridge permits one settings write per second.
-      const delay = Math.max(0, 1100 - (Date.now() - lastWriteAt));
-      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
-      lastWriteAt = Date.now();
-      await magpie.options.set(options);
+      const payload = { revision: storedRevision, state: { version: 2, enabled: state.enabled, rules } };
+      if (new TextEncoder().encode(JSON.stringify(payload)).length > 8 * 1024 * 1024 - 2048) throw new Error('提示词总量超过 8 MB，请适当缩短部分内容。');
+      const saved = await api('/api/state', payload);
+      storedRevision = saved.revision;
       if (revision === savingRevision) { state.rules = rules; state.dirty = false; $('save-status').textContent = '已保存 · 后续请求生效'; }
       else { $('save-status').textContent = '保存完成，另有新的修改待保存'; }
       renderList();
@@ -94,13 +100,13 @@
     if (!window.magpie) { error('请从 Magpie 的“模型提示词”插件页面打开。'); return; }
     try {
       await magpie.ready;
-      const options = await magpie.options.get();
+      const options = await api('/api/state');
+      storedRevision = options.revision;
       state.enabled = options.enabled !== false; $('enabled').checked = state.enabled;
       if (options.rules && typeof options.rules === 'object') for (const [id, rule] of Object.entries(options.rules)) {
         if (rule && typeof rule.prompt === 'string') state.rules[id] = { prompt: rule.prompt, enabled: rule.enabled !== false, position: rule.position === 'prepend' ? 'prepend' : 'append' };
       }
       state.ready = true; $('save-status').textContent = '粘贴提示词后，点击保存';
-      applyCatalog(window.MODEL_PROMPT_CATALOG);
       if (!state.selected && allModels().length) select(allModels()[0].id);
       refreshCatalog(); setInterval(refreshCatalog, 5000);
     } catch (e) { error('连接 Magpie 失败：' + (e?.message || String(e))); }
